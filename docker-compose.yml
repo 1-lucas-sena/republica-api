@@ -1,0 +1,16 @@
+services:
+  db-republica:
+    image: postgres:15-alpine
+    container_name: postgres_republica
+    environment:
+      POSTGRES_USER: republica_user
+      POSTGRES_PASSWORD: republica_password
+      POSTGRES_DB: republica_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
