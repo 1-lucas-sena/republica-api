@@ -3,15 +3,21 @@ package com.lucassena.republica_api.service;
 import com.lucassena.republica_api.domain.RoleSistema;
 import com.lucassena.republica_api.domain.StatusAprovacao;
 import com.lucassena.republica_api.domain.Usuario;
+import com.lucassena.republica_api.dto.request.usuario.UsuarioCadastroRequestDto;
+import com.lucassena.republica_api.dto.request.usuario.UsuarioStatusUpdateRequestDto;
+import com.lucassena.republica_api.dto.request.usuario.UsuarioUpdateRequestDto;
+import com.lucassena.republica_api.dto.response.usuario.UsuarioResponseDto;
 import com.lucassena.republica_api.exception.AcessoNegadoException;
 import com.lucassena.republica_api.exception.RegraNegocioException;
 import com.lucassena.republica_api.exception.RecursoNaoEncontradoException;
+import com.lucassena.republica_api.mapper.UsuarioMapper;
 import com.lucassena.republica_api.repository.UsuarioRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -22,81 +28,94 @@ public class UsuarioService {
     private final PerfilService perfilService;
 
     @Transactional
-    public Usuario criarUsuario(String email, String senhaHash) {
-        if (usuarioRepository.existsByEmail(email)) {
+    public UsuarioResponseDto criarUsuario(UsuarioCadastroRequestDto request) {
+        if (usuarioRepository.existsByEmail(request.email())) {
             throw new RegraNegocioException("Já existe um usuário cadastrado com este e-mail.");
         }
 
         Usuario usuario = Usuario.builder()
-                .email(email)
-                .senhaHash(senhaHash)
+                .email(request.email())
+                // TODO: trocar por PasswordEncoder quando a autenticação for implementada
+                .senhaHash(request.senha())
                 .build();
 
-        return usuarioRepository.save(usuario);
+        Usuario usuarioSalvo = usuarioRepository.save(usuario);
+        return UsuarioMapper.toResponseDto(usuarioSalvo);
     }
 
-    public Usuario buscarPorId(UUID usuarioId) {
-        return usuarioRepository.findById(usuarioId)
+    public UsuarioResponseDto buscarPorId(UUID usuarioId) {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado."));
+
+        return UsuarioMapper.toResponseDto(usuario);
     }
 
-    public Usuario buscarPorEmail(String email) {
-        return usuarioRepository.findByEmail(email)
+    public UsuarioResponseDto buscarPorEmail(String email) {
+        Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado com este e-mail."));
+
+        return UsuarioMapper.toResponseDto(usuario);
     }
 
-    public List<Usuario> listarTodos() {
-        return usuarioRepository.findAll();
+    public Page<UsuarioResponseDto> listarTodos(Pageable pageable) {
+        return usuarioRepository.findAll(pageable)
+                .map(UsuarioMapper::toResponseDto);
     }
 
     @Transactional
-    public Usuario atualizarUsuario(
+    public UsuarioResponseDto atualizarUsuario(
             UUID usuarioAlvoId,
             UUID usuarioLogadoId,
-            String novoEmail,
-            String novaSenhaHash
+            UsuarioUpdateRequestDto request
     ) {
         Usuario usuarioLogado = buscarUsuarioExistente(usuarioLogadoId);
         Usuario usuarioAlvo = buscarUsuarioExistente(usuarioAlvoId);
 
         validarPermissaoEdicao(usuarioLogado, usuarioAlvo);
 
-        if (novoEmail != null && !novoEmail.isBlank() && !novoEmail.equalsIgnoreCase(usuarioAlvo.getEmail())) {
-            if (usuarioRepository.existsByEmail(novoEmail)) {
+        if (request.email() != null
+                && !request.email().isBlank()
+                && !request.email().equalsIgnoreCase(usuarioAlvo.getEmail())) {
+
+            if (usuarioRepository.existsByEmail(request.email())) {
                 throw new RegraNegocioException("Já existe um usuário cadastrado com este e-mail.");
             }
-            usuarioAlvo.setEmail(novoEmail);
+
+            usuarioAlvo.setEmail(request.email());
         }
 
-        if (novaSenhaHash != null && !novaSenhaHash.isBlank()) {
-            usuarioAlvo.setSenhaHash(novaSenhaHash);
+        if (request.senha() != null && !request.senha().isBlank()) {
+            // TODO: trocar por PasswordEncoder quando a autenticação for implementada
+            usuarioAlvo.setSenhaHash(request.senha());
         }
 
-        return usuarioRepository.save(usuarioAlvo);
+        Usuario usuarioAtualizado = usuarioRepository.save(usuarioAlvo);
+        return UsuarioMapper.toResponseDto(usuarioAtualizado);
     }
 
     @Transactional
-    public Usuario aprovarUsuario(UUID usuarioAlvoId, UUID usuarioLogadoId) {
+    public UsuarioResponseDto atualizarStatusUsuario(
+            UUID usuarioAlvoId,
+            UUID usuarioLogadoId,
+            UsuarioStatusUpdateRequestDto request
+    ) {
         Usuario usuarioLogado = buscarUsuarioExistente(usuarioLogadoId);
         validarAdmin(usuarioLogado);
 
         Usuario usuarioAlvo = buscarUsuarioExistente(usuarioAlvoId);
-        usuarioAlvo.setStatus(StatusAprovacao.APROVADO);
 
-        return usuarioRepository.save(usuarioAlvo);
-    }
+        if (request.status() == null) {
+            throw new RegraNegocioException("Status é obrigatório.");
+        }
 
-   @Transactional
-    public Usuario rejeitarUsuario(UUID usuarioAlvoId, UUID usuarioLogadoId) {
-        Usuario usuarioLogado = buscarUsuarioExistente(usuarioLogadoId);
-        validarAdmin(usuarioLogado);
+        usuarioAlvo.setStatus(request.status());
 
-        Usuario usuarioAlvo = buscarUsuarioExistente(usuarioAlvoId);
-        usuarioAlvo.setStatus(StatusAprovacao.REJEITADO);
+        if (request.status() == StatusAprovacao.REJEITADO) {
+            perfilService.tratarPerfilAoRejeitarUsuario(usuarioAlvoId);
+        }
 
-        perfilService.tratarPerfilAoRejeitarUsuario(usuarioAlvoId);
-
-        return usuarioRepository.save(usuarioAlvo);
+        Usuario usuarioAtualizado = usuarioRepository.save(usuarioAlvo);
+        return UsuarioMapper.toResponseDto(usuarioAtualizado);
     }
 
     @Transactional
