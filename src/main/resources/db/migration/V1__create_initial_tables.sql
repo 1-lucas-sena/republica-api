@@ -1,14 +1,14 @@
 -- 1. Enums
-CREATE TYPE role_sistema_enum AS ENUM ('ADMIN', 'MEMBRO_PLENO', 'MEMBRO_CALOURO', 'RESTRITO');
+CREATE TYPE role_sistema_enum AS ENUM ('ADMIN', 'USUARIO');
 CREATE TYPE status_aprovacao_enum AS ENUM ('PENDENTE', 'APROVADO', 'REJEITADO');
-CREATE TYPE tipo_perfil_enum AS ENUM ('VISITANTE', 'CALOURO', 'MORADOR', 'EX_ALUNO', 'HOMENAGEADO');
+CREATE TYPE tipo_perfil_enum AS ENUM ('CALOURO', 'MORADOR', 'EX_ALUNO', 'HOMENAGEADO');
 
 -- 2. Usuários
 CREATE TABLE usuarios (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) NOT NULL UNIQUE,
     senha_hash VARCHAR(255) NOT NULL,
-    role_sistema role_sistema_enum NOT NULL DEFAULT 'RESTRITO',
+    role_sistema role_sistema_enum NOT NULL DEFAULT 'USUARIO',
     status status_aprovacao_enum NOT NULL DEFAULT 'PENDENTE',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -56,29 +56,48 @@ CREATE TABLE perfis (
         REFERENCES usuarios(id)
         ON DELETE SET NULL,
 
-    CONSTRAINT ck_ex_aluno_quadrinho
+    -- EX_ALUNO:
+    -- deve ter numero_quadrinho
+    -- deve ter ano_formatura
+    -- não pode ter quadrinho de homenageado
+    -- não pode ter ano_homenagem
+    CONSTRAINT ck_perfis_ex_aluno_campos
         CHECK (
             tipo_perfil <> 'EX_ALUNO'
-            OR numero_quadrinho IS NOT NULL
-        ),
-
-    CONSTRAINT ck_homenageado_quadrinho
-        CHECK (
-            tipo_perfil <> 'HOMENAGEADO'
-            OR numero_quadrinho_homenageado IS NOT NULL
-        ),
-
-    CONSTRAINT ck_homenageado_ano
-        CHECK (
-            tipo_perfil <> 'HOMENAGEADO'
-            OR ano_homenagem IS NOT NULL
-        ),
-
-    CONSTRAINT ck_exclusividade_quadrinho
-        CHECK (
-            NOT (
+            OR (
                 numero_quadrinho IS NOT NULL
-                AND numero_quadrinho_homenageado IS NOT NULL
+                AND ano_formatura IS NOT NULL
+                AND numero_quadrinho_homenageado IS NULL
+                AND ano_homenagem IS NULL
+            )
+        ),
+
+    -- HOMENAGEADO:
+    -- deve ter numero_quadrinho_homenageado
+    -- deve ter ano_homenagem
+    -- não pode ter quadrinho de ex-aluno
+    -- não pode ter ano_formatura
+    CONSTRAINT ck_perfis_homenageado_campos
+        CHECK (
+            tipo_perfil <> 'HOMENAGEADO'
+            OR (
+                numero_quadrinho_homenageado IS NOT NULL
+                AND ano_homenagem IS NOT NULL
+                AND numero_quadrinho IS NULL
+                AND ano_formatura IS NULL
+            )
+        ),
+
+    -- CALOURO e MORADOR:
+    -- não podem ter campos de quadrinho/anos históricos
+    CONSTRAINT ck_perfis_outros_sem_campos_historicos
+        CHECK (
+            tipo_perfil IN ('EX_ALUNO', 'HOMENAGEADO')
+            OR (
+                numero_quadrinho IS NULL
+                AND numero_quadrinho_homenageado IS NULL
+                AND ano_formatura IS NULL
+                AND ano_homenagem IS NULL
             )
         )
 );
@@ -86,13 +105,16 @@ CREATE TABLE perfis (
 -- 4. Índices únicos parciais
 CREATE UNIQUE INDEX uk_perfis_numero_quadrinho_ex_aluno
     ON perfis (numero_quadrinho)
-    WHERE tipo_perfil = 'EX_ALUNO' AND numero_quadrinho IS NOT NULL;
+    WHERE tipo_perfil = 'EX_ALUNO'
+      AND numero_quadrinho IS NOT NULL;
 
 CREATE UNIQUE INDEX uk_perfis_numero_quadrinho_homenageado
     ON perfis (numero_quadrinho_homenageado)
-    WHERE tipo_perfil = 'HOMENAGEADO' AND numero_quadrinho_homenageado IS NOT NULL;
+    WHERE tipo_perfil = 'HOMENAGEADO'
+      AND numero_quadrinho_homenageado IS NOT NULL;
 
 -- 5. Índices úteis
 CREATE INDEX idx_perfis_tipo_perfil ON perfis(tipo_perfil);
 CREATE INDEX idx_perfis_nome_completo ON perfis(nome_completo);
+CREATE INDEX idx_perfis_apelido ON perfis(apelido);
 CREATE INDEX idx_perfis_usuario_id ON perfis(usuario_id);
