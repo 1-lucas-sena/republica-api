@@ -50,10 +50,10 @@ public class Perfil {
     @Column(name = "ano_homenagem")
     private Integer anoHomenagem;
 
-    @Column(name = "numero_quadrinho", unique = true)
+    @Column(name = "numero_quadrinho")
     private Integer numeroQuadrinho;
     
-    @Column(name = "numero_quadrinho_homenageado", unique = true)
+    @Column(name = "numero_quadrinho_homenageado")
     private Integer numeroQuadrinhoHomenageado;
 
     @Column(name = "url_foto", columnDefinition = "TEXT")

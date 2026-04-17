@@ -27,13 +27,15 @@ public class Usuario {
     @Column(name = "senha_hash", nullable = false)
     private String senhaHash;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "role_sistema", nullable = false)
-    private RoleSistema roleSistema;
+    private RoleSistema roleSistema = RoleSistema.USUARIO;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private StatusAprovacao status;
+    private StatusAprovacao status = StatusAprovacao.PENDENTE;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
