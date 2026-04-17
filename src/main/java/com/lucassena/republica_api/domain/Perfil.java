@@ -32,6 +32,11 @@ public class Perfil {
     @Column(name = "tipo_perfil", nullable = false)
     private TipoPerfil tipoPerfil;
 
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "origem_perfil", nullable = false)
+    private OrigemPerfil origemPerfil = OrigemPerfil.AUTO_CADASTRO;
+
     @Column(name = "nome_completo", nullable = false)
     private String nomeCompleto;
 
@@ -93,4 +98,5 @@ public class Perfil {
     @UpdateTimestamp
     @Column(name = "ultima_atualizacao", nullable = false)
     private LocalDateTime ultimaAtualizacao;
+    
 }
