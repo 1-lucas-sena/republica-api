@@ -5,17 +5,24 @@ import com.lucassena.republica_api.domain.Perfil;
 import com.lucassena.republica_api.domain.RoleSistema;
 import com.lucassena.republica_api.domain.TipoPerfil;
 import com.lucassena.republica_api.domain.Usuario;
+import com.lucassena.republica_api.dto.request.perfil.PerfilCreateRequestDto;
+import com.lucassena.republica_api.dto.request.perfil.PerfilReivindicarExAlunoRequestDto;
+import com.lucassena.republica_api.dto.request.perfil.PerfilReivindicarHomenageadoRequestDto;
+import com.lucassena.republica_api.dto.request.perfil.PerfilUpdateRequestDto;
+import com.lucassena.republica_api.dto.response.perfil.PerfilPrivadoResponseDto;
+import com.lucassena.republica_api.dto.response.perfil.PerfilResponseDto;
 import com.lucassena.republica_api.exception.AcessoNegadoException;
 import com.lucassena.republica_api.exception.RegraNegocioException;
 import com.lucassena.republica_api.exception.RecursoNaoEncontradoException;
+import com.lucassena.republica_api.mapper.PerfilMapper;
 import com.lucassena.republica_api.repository.PerfilRepository;
 import com.lucassena.republica_api.repository.UsuarioRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -26,152 +33,119 @@ public class PerfilService {
     private final UsuarioRepository usuarioRepository;
 
     @Transactional
-    public Perfil criarPerfil(
-            UUID usuarioLogadoId,
-            UUID usuarioVinculadoId,
-            TipoPerfil tipoPerfil,
-            String nomeCompleto,
-            String apelido,
-            String curso,
-            String periodoCurso,
-            String semestreEntrada,
-            Integer anoFormatura,
-            Integer anoHomenagem,
-            Integer numeroQuadrinho,
-            Integer numeroQuadrinhoHomenageado,
-            String urlFoto,
-            String emailContato,
-            String telefoneCelular,
-            String telefoneResidencial,
-            LocalDate dataNascimento,
-            String endereco,
-            String bairro,
-            String cidade,
-            String estado,
-            String cep,
-            String empresaAtual,
-            String anotacoes
-    ) {
+    public PerfilPrivadoResponseDto criarPerfil(UUID usuarioLogadoId, PerfilCreateRequestDto request) {
         Usuario usuarioLogado = buscarUsuarioExistente(usuarioLogadoId);
-        validarPermissaoCriacaoPerfil(usuarioLogado, usuarioVinculadoId);
+
+        UUID usuarioVinculadoIdEfetivo = resolverUsuarioVinculadoId(usuarioLogado, request.usuarioVinculadoId());
+
+        validarPermissaoCriacaoPerfil(usuarioLogado, usuarioVinculadoIdEfetivo);
 
         validarCamposObrigatoriosPorTipo(
-                nomeCompleto,
-                tipoPerfil,
-                anoFormatura,
-                anoHomenagem,
-                numeroQuadrinho,
-                numeroQuadrinhoHomenageado
+                request.nomeCompleto(),
+                request.tipoPerfil(),
+                request.anoFormatura(),
+                request.anoHomenagem(),
+                request.numeroQuadrinho(),
+                request.numeroQuadrinhoHomenageado()
         );
 
-        validarQuadrinhoExAluno(null, tipoPerfil, numeroQuadrinho);
-        validarQuadrinhoHomenageado(null, tipoPerfil, numeroQuadrinhoHomenageado);
+        validarQuadrinhoExAluno(null, request.tipoPerfil(), request.numeroQuadrinho());
+        validarQuadrinhoHomenageado(null, request.tipoPerfil(), request.numeroQuadrinhoHomenageado());
 
         Usuario usuarioVinculado = null;
-        if (usuarioVinculadoId != null) {
-            usuarioVinculado = buscarUsuarioExistente(usuarioVinculadoId);
-            validarUsuarioSemPerfil(usuarioVinculadoId);
+        if (usuarioVinculadoIdEfetivo != null) {
+            usuarioVinculado = buscarUsuarioExistente(usuarioVinculadoIdEfetivo);
+            validarUsuarioSemPerfil(usuarioVinculadoIdEfetivo);
         }
 
-        OrigemPerfil origemPerfil = definirOrigemPerfil(usuarioLogado, usuarioVinculadoId);
+        OrigemPerfil origemPerfil = definirOrigemPerfil(usuarioLogado);
 
         Perfil perfil = Perfil.builder()
                 .usuario(usuarioVinculado)
-                .tipoPerfil(tipoPerfil)
+                .tipoPerfil(request.tipoPerfil())
                 .origemPerfil(origemPerfil)
-                .nomeCompleto(nomeCompleto)
-                .apelido(apelido)
-                .curso(curso)
-                .periodoCurso(periodoCurso)
-                .semestreEntrada(semestreEntrada)
-                .anoFormatura(anoFormatura)
-                .anoHomenagem(anoHomenagem)
-                .numeroQuadrinho(numeroQuadrinho)
-                .numeroQuadrinhoHomenageado(numeroQuadrinhoHomenageado)
-                .urlFoto(urlFoto)
-                .emailContato(emailContato)
-                .telefoneCelular(telefoneCelular)
-                .telefoneResidencial(telefoneResidencial)
-                .dataNascimento(dataNascimento)
-                .endereco(endereco)
-                .bairro(bairro)
-                .cidade(cidade)
-                .estado(estado)
-                .cep(cep)
-                .empresaAtual(empresaAtual)
-                .anotacoes(anotacoes)
+                .nomeCompleto(request.nomeCompleto())
+                .apelido(request.apelido())
+                .curso(request.curso())
+                .periodoCurso(request.periodoCurso())
+                .semestreEntrada(request.semestreEntrada())
+                .anoFormatura(request.anoFormatura())
+                .anoHomenagem(request.anoHomenagem())
+                .numeroQuadrinho(request.numeroQuadrinho())
+                .numeroQuadrinhoHomenageado(request.numeroQuadrinhoHomenageado())
+                .urlFoto(request.urlFoto())
+                .emailContato(request.emailContato())
+                .telefoneCelular(request.telefoneCelular())
+                .telefoneResidencial(request.telefoneResidencial())
+                .dataNascimento(request.dataNascimento())
+                .endereco(request.endereco())
+                .bairro(request.bairro())
+                .cidade(request.cidade())
+                .estado(request.estado())
+                .cep(request.cep())
+                .empresaAtual(request.empresaAtual())
+                .anotacoes(request.anotacoes())
                 .build();
 
-        return perfilRepository.save(perfil);
+        Perfil salvo = perfilRepository.save(perfil);
+        return PerfilMapper.toPrivadoResponseDto(salvo);
     }
 
-    public Perfil buscarPorId(UUID perfilId) {
-        return buscarPerfilExistente(perfilId);
+    public PerfilResponseDto buscarPorId(UUID perfilId, UUID usuarioLogadoId) {
+        Perfil perfil = buscarPerfilExistente(perfilId);
+        return mapearParaVisualizacao(usuarioLogadoId, perfil);
     }
 
-    public Perfil buscarPorUsuarioId(UUID usuarioId) {
-        return perfilRepository.findByUsuarioId(usuarioId)
+    public PerfilResponseDto buscarPorUsuarioId(UUID usuarioAlvoId, UUID usuarioLogadoId) {
+        Perfil perfil = perfilRepository.findByUsuarioId(usuarioAlvoId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Perfil não encontrado para este usuário."));
+        return mapearParaVisualizacao(usuarioLogadoId, perfil);
     }
 
-    public List<Perfil> listarTodos() {
-        return perfilRepository.findAll();
+    public Page<PerfilResponseDto> listarTodos(UUID usuarioLogadoId, Pageable pageable) {
+        return perfilRepository.findAll(pageable)
+                .map(perfil -> mapearParaVisualizacao(usuarioLogadoId, perfil));
     }
 
-    public List<Perfil> listarPorTipo(TipoPerfil tipoPerfil) {
-        return perfilRepository.findByTipoPerfil(tipoPerfil);
+    public Page<PerfilResponseDto> listarPorTipo(TipoPerfil tipoPerfil, UUID usuarioLogadoId, Pageable pageable) {
+        return perfilRepository.findByTipoPerfil(tipoPerfil, pageable)
+                .map(perfil -> mapearParaVisualizacao(usuarioLogadoId, perfil));
     }
 
     @Transactional
-    public Perfil atualizarPerfil(
-            UUID perfilAlvoId,
+    public PerfilPrivadoResponseDto atualizarPerfil(
+            UUID perfilId,
             UUID usuarioLogadoId,
-            TipoPerfil novoTipoPerfil,
-            String nomeCompleto,
-            String apelido,
-            String curso,
-            String periodoCurso,
-            String semestreEntrada,
-            Integer anoFormatura,
-            Integer anoHomenagem,
-            Integer numeroQuadrinho,
-            Integer numeroQuadrinhoHomenageado,
-            String urlFoto,
-            String emailContato,
-            String telefoneCelular,
-            String telefoneResidencial,
-            LocalDate dataNascimento,
-            String endereco,
-            String bairro,
-            String cidade,
-            String estado,
-            String cep,
-            String empresaAtual,
-            String anotacoes
+            PerfilUpdateRequestDto request
     ) {
         Usuario usuarioLogado = buscarUsuarioExistente(usuarioLogadoId);
-        Perfil perfilAlvo = buscarPerfilExistente(perfilAlvoId);
+        Perfil perfilAlvo = buscarPerfilExistente(perfilId);
 
         validarPermissaoEdicaoPerfil(usuarioLogado, perfilAlvo);
 
-        TipoPerfil tipoFinal = novoTipoPerfil != null ? novoTipoPerfil : perfilAlvo.getTipoPerfil();
-        String nomeCompletoFinal = nomeCompleto != null ? nomeCompleto : perfilAlvo.getNomeCompleto();
+        TipoPerfil tipoFinal = request.tipoPerfil() != null
+                ? request.tipoPerfil()
+                : perfilAlvo.getTipoPerfil();
+
+        String nomeCompletoFinal = request.nomeCompleto() != null
+                ? request.nomeCompleto()
+                : perfilAlvo.getNomeCompleto();
 
         Integer anoFormaturaFinal = tipoFinal == TipoPerfil.EX_ALUNO
-                ? (anoFormatura != null ? anoFormatura : perfilAlvo.getAnoFormatura())
+                ? (request.anoFormatura() != null ? request.anoFormatura() : perfilAlvo.getAnoFormatura())
                 : null;
 
         Integer numeroQuadrinhoFinal = tipoFinal == TipoPerfil.EX_ALUNO
-                ? (numeroQuadrinho != null ? numeroQuadrinho : perfilAlvo.getNumeroQuadrinho())
+                ? (request.numeroQuadrinho() != null ? request.numeroQuadrinho() : perfilAlvo.getNumeroQuadrinho())
                 : null;
 
         Integer anoHomenagemFinal = tipoFinal == TipoPerfil.HOMENAGEADO
-                ? (anoHomenagem != null ? anoHomenagem : perfilAlvo.getAnoHomenagem())
+                ? (request.anoHomenagem() != null ? request.anoHomenagem() : perfilAlvo.getAnoHomenagem())
                 : null;
 
         Integer numeroQuadrinhoHomenageadoFinal = tipoFinal == TipoPerfil.HOMENAGEADO
-                ? (numeroQuadrinhoHomenageado != null
-                    ? numeroQuadrinhoHomenageado
+                ? (request.numeroQuadrinhoHomenageado() != null
+                    ? request.numeroQuadrinhoHomenageado()
                     : perfilAlvo.getNumeroQuadrinhoHomenageado())
                 : null;
 
@@ -194,68 +168,81 @@ public class PerfilService {
         perfilAlvo.setAnoHomenagem(anoHomenagemFinal);
         perfilAlvo.setNumeroQuadrinhoHomenageado(numeroQuadrinhoHomenageadoFinal);
 
-        if (apelido != null) perfilAlvo.setApelido(apelido);
-        if (curso != null) perfilAlvo.setCurso(curso);
-        if (periodoCurso != null) perfilAlvo.setPeriodoCurso(periodoCurso);
-        if (semestreEntrada != null) perfilAlvo.setSemestreEntrada(semestreEntrada);
-        if (urlFoto != null) perfilAlvo.setUrlFoto(urlFoto);
-        if (emailContato != null) perfilAlvo.setEmailContato(emailContato);
-        if (telefoneCelular != null) perfilAlvo.setTelefoneCelular(telefoneCelular);
-        if (telefoneResidencial != null) perfilAlvo.setTelefoneResidencial(telefoneResidencial);
-        if (dataNascimento != null) perfilAlvo.setDataNascimento(dataNascimento);
-        if (endereco != null) perfilAlvo.setEndereco(endereco);
-        if (bairro != null) perfilAlvo.setBairro(bairro);
-        if (cidade != null) perfilAlvo.setCidade(cidade);
-        if (estado != null) perfilAlvo.setEstado(estado);
-        if (cep != null) perfilAlvo.setCep(cep);
-        if (empresaAtual != null) perfilAlvo.setEmpresaAtual(empresaAtual);
-        if (anotacoes != null) perfilAlvo.setAnotacoes(anotacoes);
+        if (request.apelido() != null) perfilAlvo.setApelido(request.apelido());
+        if (request.curso() != null) perfilAlvo.setCurso(request.curso());
+        if (request.periodoCurso() != null) perfilAlvo.setPeriodoCurso(request.periodoCurso());
+        if (request.semestreEntrada() != null) perfilAlvo.setSemestreEntrada(request.semestreEntrada());
+        if (request.urlFoto() != null) perfilAlvo.setUrlFoto(request.urlFoto());
+        if (request.emailContato() != null) perfilAlvo.setEmailContato(request.emailContato());
+        if (request.telefoneCelular() != null) perfilAlvo.setTelefoneCelular(request.telefoneCelular());
+        if (request.telefoneResidencial() != null) perfilAlvo.setTelefoneResidencial(request.telefoneResidencial());
+        if (request.dataNascimento() != null) perfilAlvo.setDataNascimento(request.dataNascimento());
+        if (request.endereco() != null) perfilAlvo.setEndereco(request.endereco());
+        if (request.bairro() != null) perfilAlvo.setBairro(request.bairro());
+        if (request.cidade() != null) perfilAlvo.setCidade(request.cidade());
+        if (request.estado() != null) perfilAlvo.setEstado(request.estado());
+        if (request.cep() != null) perfilAlvo.setCep(request.cep());
+        if (request.empresaAtual() != null) perfilAlvo.setEmpresaAtual(request.empresaAtual());
+        if (request.anotacoes() != null) perfilAlvo.setAnotacoes(request.anotacoes());
 
-        return perfilRepository.save(perfilAlvo);
+        Perfil atualizado = perfilRepository.save(perfilAlvo);
+        return PerfilMapper.toPrivadoResponseDto(atualizado);
     }
 
     @Transactional
-    public Perfil reivindicarPerfilExAluno(UUID usuarioLogadoId, Integer numeroQuadrinho) {
+    public PerfilPrivadoResponseDto reivindicarPerfilExAluno(
+            UUID usuarioLogadoId,
+            PerfilReivindicarExAlunoRequestDto request
+    ) {
         Usuario usuarioLogado = buscarUsuarioExistente(usuarioLogadoId);
         validarUsuarioSemPerfil(usuarioLogadoId);
 
         Perfil perfil = perfilRepository.findByTipoPerfilAndNumeroQuadrinho(
                         TipoPerfil.EX_ALUNO,
-                        numeroQuadrinho
+                        request.numeroQuadrinho()
                 )
                 .orElseThrow(() -> new RecursoNaoEncontradoException(
                         "Perfil de ex-aluno não encontrado para este quadrinho."
                 ));
 
         validarPerfilDisponivelParaReivindicacao(perfil);
+        validarPerfilPreCadastrado(perfil);
 
         perfil.setUsuario(usuarioLogado);
-        return perfilRepository.save(perfil);
+
+        Perfil atualizado = perfilRepository.save(perfil);
+        return PerfilMapper.toPrivadoResponseDto(atualizado);
     }
 
     @Transactional
-    public Perfil reivindicarPerfilHomenageado(UUID usuarioLogadoId, Integer numeroQuadrinhoHomenageado) {
+    public PerfilPrivadoResponseDto reivindicarPerfilHomenageado(
+            UUID usuarioLogadoId,
+            PerfilReivindicarHomenageadoRequestDto request
+    ) {
         Usuario usuarioLogado = buscarUsuarioExistente(usuarioLogadoId);
         validarUsuarioSemPerfil(usuarioLogadoId);
 
         Perfil perfil = perfilRepository.findByTipoPerfilAndNumeroQuadrinhoHomenageado(
                         TipoPerfil.HOMENAGEADO,
-                        numeroQuadrinhoHomenageado
+                        request.numeroQuadrinhoHomenageado()
                 )
                 .orElseThrow(() -> new RecursoNaoEncontradoException(
                         "Perfil de homenageado não encontrado para este quadrinho."
                 ));
 
         validarPerfilDisponivelParaReivindicacao(perfil);
+        validarPerfilPreCadastrado(perfil);
 
         perfil.setUsuario(usuarioLogado);
-        return perfilRepository.save(perfil);
+
+        Perfil atualizado = perfilRepository.save(perfil);
+        return PerfilMapper.toPrivadoResponseDto(atualizado);
     }
 
     @Transactional
-    public void excluirPerfil(UUID perfilAlvoId, UUID usuarioLogadoId) {
+    public void excluirPerfil(UUID perfilId, UUID usuarioLogadoId) {
         Usuario usuarioLogado = buscarUsuarioExistente(usuarioLogadoId);
-        Perfil perfilAlvo = buscarPerfilExistente(perfilAlvoId);
+        Perfil perfilAlvo = buscarPerfilExistente(perfilId);
 
         validarPermissaoExclusaoPerfil(usuarioLogado, perfilAlvo);
 
@@ -285,7 +272,14 @@ public class PerfilService {
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado."));
     }
 
-    private void validarPermissaoCriacaoPerfil(Usuario usuarioLogado, UUID usuarioVinculadoId) {
+    private PerfilResponseDto mapearParaVisualizacao(UUID usuarioLogadoId, Perfil perfil) {
+        if (podeVerDadosSensiveis(usuarioLogadoId, perfil)) {
+            return PerfilMapper.toPrivadoResponseDto(perfil);
+        }
+        return PerfilMapper.toPublicoResponseDto(perfil);
+    }
+
+    private void validarPermissaoCriacaoPerfil(Usuario usuarioLogado, UUID usuarioVinculadoIdEfetivo) {
         if (usuarioLogado.getRoleSistema() == RoleSistema.ADMIN) {
             return;
         }
@@ -296,8 +290,7 @@ public class PerfilService {
             return;
         }
 
-        boolean ehCriacaoDoProprioPerfil =
-                usuarioVinculadoId != null && usuarioLogado.getId().equals(usuarioVinculadoId);
+        boolean ehCriacaoDoProprioPerfil = usuarioLogado.getId().equals(usuarioVinculadoIdEfetivo);
 
         if (!ehCriacaoDoProprioPerfil) {
             throw new AcessoNegadoException("Você não tem permissão para criar este perfil.");
@@ -401,13 +394,10 @@ public class PerfilService {
 
         perfilRepository.findByTipoPerfilAndNumeroQuadrinho(TipoPerfil.EX_ALUNO, numeroQuadrinho)
                 .ifPresent(perfilExistente -> {
-                    boolean ehOutroPerfil =
-                            perfilAtualId == null || !perfilExistente.getId().equals(perfilAtualId);
+                    boolean ehOutroPerfil = perfilAtualId == null || !perfilExistente.getId().equals(perfilAtualId);
 
                     if (ehOutroPerfil) {
-                        throw new RegraNegocioException(
-                                "Já existe um ex-aluno com este número de quadrinho."
-                        );
+                        throw new RegraNegocioException("Já existe um ex-aluno com este número de quadrinho.");
                     }
                 });
     }
@@ -426,13 +416,10 @@ public class PerfilService {
                         numeroQuadrinhoHomenageado
                 )
                 .ifPresent(perfilExistente -> {
-                    boolean ehOutroPerfil =
-                            perfilAtualId == null || !perfilExistente.getId().equals(perfilAtualId);
+                    boolean ehOutroPerfil = perfilAtualId == null || !perfilExistente.getId().equals(perfilAtualId);
 
                     if (ehOutroPerfil) {
-                        throw new RegraNegocioException(
-                                "Já existe um homenageado com este número de quadrinho."
-                        );
+                        throw new RegraNegocioException("Já existe um homenageado com este número de quadrinho.");
                     }
                 });
     }
@@ -440,6 +427,12 @@ public class PerfilService {
     private void validarPerfilDisponivelParaReivindicacao(Perfil perfil) {
         if (perfil.getUsuario() != null) {
             throw new RegraNegocioException("Este perfil já foi reivindicado por outro usuário.");
+        }
+    }
+
+    private void validarPerfilPreCadastrado(Perfil perfil) {
+        if (perfil.getOrigemPerfil() != OrigemPerfil.PRE_CADASTRADO) {
+            throw new RegraNegocioException("Apenas perfis pré-cadastrados podem ser reivindicados.");
         }
     }
 
@@ -478,7 +471,7 @@ public class PerfilService {
                 && perfilAlvo.getTipoPerfil() == TipoPerfil.CALOURO;
     }
 
-    private OrigemPerfil definirOrigemPerfil(Usuario usuarioLogado, UUID usuarioVinculadoId) {
+    private OrigemPerfil definirOrigemPerfil(Usuario usuarioLogado) {
         if (usuarioLogado.getRoleSistema() == RoleSistema.ADMIN) {
             return OrigemPerfil.PRE_CADASTRADO;
         }
@@ -489,13 +482,19 @@ public class PerfilService {
             return OrigemPerfil.PRE_CADASTRADO;
         }
 
-        boolean ehCriacaoDoProprioPerfil =
-                usuarioVinculadoId != null && usuarioLogado.getId().equals(usuarioVinculadoId);
+        return OrigemPerfil.AUTO_CADASTRO;
+    }
 
-        if (ehCriacaoDoProprioPerfil) {
-            return OrigemPerfil.AUTO_CADASTRO;
+    private UUID resolverUsuarioVinculadoId(Usuario usuarioLogado, UUID usuarioVinculadoIdInformado) {
+        boolean ehAdmin = usuarioLogado.getRoleSistema() == RoleSistema.ADMIN;
+
+        Perfil perfilSolicitante = perfilRepository.findByUsuarioId(usuarioLogado.getId()).orElse(null);
+        boolean ehMorador = perfilSolicitante != null && perfilSolicitante.getTipoPerfil() == TipoPerfil.MORADOR;
+
+        if (ehAdmin || ehMorador) {
+            return usuarioVinculadoIdInformado;
         }
 
-        throw new AcessoNegadoException("Não foi possível definir a origem do perfil.");
+        return usuarioLogado.getId();
     }
 }
